@@ -1,6 +1,7 @@
 /*
  * Copyright 2013 Hannes Janetzek
  * Copyright 2018 devemux86
+ * Copyright 2018 Gustl22
  *
  * This file is part of the OpenScienceMap project (http://www.opensciencemap.org).
  *
@@ -34,6 +35,8 @@ import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Set;
+import java.util.TreeSet;
 
 import static org.oscim.layers.tile.MapTile.State.CANCEL;
 import static org.oscim.layers.tile.MapTile.State.DEADBEEF;
@@ -53,8 +56,13 @@ public class TileManager {
     private final int mCacheLimit;
     private int mCacheReduce;
 
-    private int mMinZoom;
+    int mMinZoom;
     private int mMaxZoom;
+
+    /**
+     * Ordered collection (no duplicates) of zoom limits, useful for some layers.
+     */
+    private final Set<Integer> mZoomLimits = new TreeSet<>();
 
     private int[] mZoomTable;
 
@@ -304,6 +312,14 @@ public class TileManager {
         /* scan visible tiles. callback function calls 'addTile'
          * which updates mNewTiles */
         mNewTiles.cnt = 0;
+
+        // Retrieve tiles needed for layers to multiple rendering
+        for (Integer zoom : mZoomLimits) {
+            if (tileZoom > zoom)
+                mScanBox.scan(pos.x, pos.y, pos.scale, zoom, mMapPlane);
+        }
+
+        // Retrieve regular tiles at tile zoom
         mScanBox.scan(pos.x, pos.y, pos.scale, tileZoom, mMapPlane);
 
         MapTile[] newTiles = mNewTiles.tiles;
@@ -392,7 +408,7 @@ public class TileManager {
     }
 
     /**
-     * Retrive a TileSet of current tiles. Tiles remain locked in cache until
+     * Retrieve a TileSet of current tiles. Tiles remain locked in cache until
      * the set is unlocked by either passing it again to this function or to
      * releaseTiles.
      *
@@ -728,5 +744,21 @@ public class TileManager {
     public void setZoomLevel(int zoomLevelMin, int zoomLevelMax) {
         mMinZoom = zoomLevelMin;
         mMaxZoom = zoomLevelMax;
+    }
+
+    /**
+     * Allow loading tiles at specified zoom if higher zoom levels are requested.
+     */
+    public void addZoomLimit(int zoomLimit) {
+        if (zoomLimit > mMinZoom && zoomLimit < mMaxZoom)
+            mZoomLimits.add(zoomLimit);
+    }
+
+    /**
+     * Remove zoom limit.
+     * Tiles of that zoom level won't be requested anymore on higher zoom levels.
+     */
+    public void removeZoomLimit(int zoomLimit) {
+        mZoomLimits.remove(zoomLimit);
     }
 }
